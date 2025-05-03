@@ -1,65 +1,48 @@
 module.exports.config = {
-  name: "afk",
+  name: "ردتلقائي",
   version: "1.0.0",
-  hasPermssion: 0,
-  credits: "Henry",
-  description: "Bật hoặc tắt chế độ afk",
-  usages: "[lí do]",
-  commandCategory: "Thành Viên",
+  hasPermssion: 1,
+  credits: "Replit Assistant",
+  description: "الرد التلقائي على جميع الرسائل",
+  commandCategory: "النظام",
+  usages: "تشغيل/ايقاف [النص]",
   cooldowns: 5
 };
 
-const busyPath = __dirname + '/cache/data/busy.json';
-const fs = require('fs');
+const fs = require('fs-extra');
+const pathFile = __dirname + '/cache/autoreply.json';
 
-module.exports.onLoad = () => {
-  if (!fs.existsSync(busyPath)) fs.writeFileSync(busyPath, JSON.stringify({}));
+if (!fs.existsSync(pathFile)) {
+  fs.writeFileSync(pathFile, JSON.stringify({
+    enabled: false,
+    message: "شكراً لرسالتك! 🌟"
+  }));
 }
 
-module.exports.handleEvent = async function({ api, event, Users }) {
-    let busyData = JSON.parse(fs.readFileSync(busyPath));
-    var { senderID, threadID, messageID, mentions } = event;
-    if (senderID in busyData) {
-        var info = busyData[senderID];
-        delete busyData[senderID];
-        fs.writeFileSync(busyPath, JSON.stringify(busyData, null, 4));
-        return api.sendMessage(`Chào mừng bạn đã quay trở lại! 🥰`, threadID, () => {
-            if (info.tag.length == 0) api.sendMessage("Trong lúc bạn đi vắng, không có ai nhắc đến bạn cả", threadID);
-            else {
-                var msg = "";
-                for (var i of info.tag) {
-                    msg += `${i}\n`
-                }
-                api.sendMessage("Đây là danh sách những tin nhắn bạn được tag trong khi bạn đi vắng:\n\n" + msg, threadID)
-            }
-        }, messageID);
-    }
+module.exports.handleEvent = async function({ api, event }) {
+  if (event.type !== "message" && event.type !== "message_reply") return;
+  
+  const data = JSON.parse(fs.readFileSync(pathFile));
+  if (data.enabled && event.senderID !== api.getCurrentUserID()) {
+    api.sendMessage(data.message, event.threadID, event.messageID);
+  }
+};
 
-    if (!mentions || Object.keys(mentions).length == 0) return;
-
-    for (const [ID, name] of Object.entries(mentions)) {
-        if (ID in busyData) {
-            var infoBusy = busyData[ID], mentioner = await Users.getNameUser(senderID), replaceName = event.body.replace(`${name}`, "");
-            infoBusy.tag.push(`${mentioner}: ${replaceName == "" ? "Đã tag bạn" : replaceName}`)
-            busyData[ID] = infoBusy;
-            fs.writeFileSync(busyPath, JSON.stringify(busyData, null, 4));
-            return api.sendMessage(`${name.replace("@", "")} hiện đang bận${infoBusy.lido ? ` với lý do: ${infoBusy.lido}.` : "."}`, threadID, messageID);
-        }
-    }
-}
-
-module.exports.run = async function({ api, event, args, Users }) {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-    let busyData = JSON.parse(fs.readFileSync(busyPath));
-    const { threadID, senderID, messageID, body } = event;
-    var content = args.join(" ") || "";
-    if (!(senderID in busyData)) {
-        busyData[senderID] = {
-            lido: content,
-            tag: []
-        }
-        fs.writeFileSync(busyPath, JSON.stringify(busyData, null, 4));
-        var msg = (content.length == 0) ? 'Bạn đã bật chế độ afk mà không có lí do' : `Bạn đã bật chế độ afk với lí do: ${content}`;
-        return api.sendMessage(msg, threadID, messageID);
-    }
-}
+module.exports.run = async function({ api, event, args }) {
+  const data = JSON.parse(fs.readFileSync(pathFile));
+  
+  if (args[0] === "تشغيل") {
+    data.enabled = true;
+    if (args[1]) data.message = args.slice(1).join(" ");
+    fs.writeFileSync(pathFile, JSON.stringify(data));
+    api.sendMessage("✅ تم تفعيل الرد التلقائي\nالرسالة: " + data.message, event.threadID);
+  }
+  else if (args[0] === "ايقاف") {
+    data.enabled = false;
+    fs.writeFileSync(pathFile, JSON.stringify(data));
+    api.sendMessage("⭕ تم إيقاف الرد التلقائي", event.threadID);
+  }
+  else {
+    api.sendMessage("❓ الاستخدام:\nردتلقائي تشغيل [النص]\nردتلقائي ايقاف", event.threadID);
+  }
+};
